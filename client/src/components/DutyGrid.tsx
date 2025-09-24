@@ -632,7 +632,7 @@ export function DutyGrid() {
             Valgt barn: {selectedChildForHighlight}
           </h3>
           <div className="text-sm text-green-800">
-            <p className="mb-2">Trafikkvakt-oppgaver denne uken:</p>
+            <p className="mb-2">Trafikkvakter denne uken:</p>
             <div className="flex flex-wrap gap-2">
               {duties && Object.entries(duties.duties).map(([crossing, days]) =>
                 Object.entries(days).map(([day, child]) =>
@@ -702,7 +702,7 @@ export function DutyGrid() {
           <div className="text-blue-800 text-sm">
             <div className="font-semibold mb-2">📱 Mobil:</div>
             <div className="space-y-1">
-              <div>• <strong>Enkelt-klikk</strong> på et barn for å se alle deres oppgaver</div>
+              <div>• <strong>Enkelt-klikk</strong> på et barn for å se alle deres vakter</div>
               <div>• <strong>Dobbeltklikk</strong> på et barn for å velge det for bytte</div>
               <div>• Klikk på tom rute eller annet barn for å fullføre bytte</div>
             </div>

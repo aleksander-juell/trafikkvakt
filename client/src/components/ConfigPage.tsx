@@ -125,7 +125,7 @@ export function ConfigPage() {
 
   const autoFillDuties = async () => {
     if (children.length === 0 || crossings.length === 0) {
-      setAutoFillMessage('Vennligst legg til barn og veikryss før auto-utfylling av oppgaver.');
+      setAutoFillMessage('Vennligst legg til barn og veikryss før auto-utfylling av vakter.');
       setTimeout(() => setAutoFillMessage(''), 5000);
       return;
     }
@@ -141,7 +141,7 @@ export function ConfigPage() {
 
       if (response.ok) {
         const result = await response.json();
-        setAutoFillMessage(`Oppgaver auto-utfylt! ${Object.keys(result.distribution).length} barn tildelt.`);
+        setAutoFillMessage(`Vakter auto-utfylt! ${Object.keys(result.distribution).length} barn tildelt.`);
         
         console.log('ConfigPage: Auto-fill successful, result:', result);
         console.log('ConfigPage: Dispatching autoFillComplete event after delay');
@@ -156,7 +156,7 @@ export function ConfigPage() {
       }
     } catch (error) {
       console.error('Auto-fill error:', error);
-      setAutoFillMessage('Kunne ikke auto-utfylle oppgaver. Prøv igjen.');
+      setAutoFillMessage('Kunne ikke auto-utfylle vakter. Prøv igjen.');
     } finally {
       setIsAutoFilling(false);
       setTimeout(() => setAutoFillMessage(''), 5000);
@@ -314,18 +314,18 @@ export function ConfigPage() {
 
         {/* Auto-Fill Duties */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold mb-4">Oppgaveadministrasjon</h2>
+          <h2 className="text-xl font-semibold mb-4">Vaktadministrasjon</h2>
           <div className="space-y-4">
             <div>
               <p className="text-gray-600 mb-4">
-                Auto-utfyll vil fordele oppgaver rettferdig mellom alle barn, og sikre at ingen barn blir tildelt flere veikryss på samme dag.
+                Auto-utfyll vil fordele vakter rettferdig mellom alle barn, og sikre at ingen barn blir tildelt flere veikryss på samme dag.
               </p>
               <button
                 onClick={autoFillDuties}
                 disabled={isAutoFilling || children.length === 0 || crossings.length === 0}
                 className="px-6 py-3 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
               >
-                {isAutoFilling ? 'Auto-utfyller...' : 'Auto-utfyll alle oppgaver'}
+                {isAutoFilling ? 'Auto-utfyller...' : 'Auto-utfyll alle vakter'}
               </button>
             </div>
             {autoFillMessage && (
