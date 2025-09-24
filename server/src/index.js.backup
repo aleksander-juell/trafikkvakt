@@ -1,0 +1,618 @@
+// Load environment variables // Create a simpler startup without DataService for debugging
+console.log('Starting server immediately without DataService...');
+app.listen(PORT, () => {
+  console.log('='.repeat(50));
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📝 Environment: ${isProduction ? 'production' : 'development'}`);
+  console.log(`🔑 Azure Connection String:`, process.env.AZURE_STORAGE_CONNECTION_STRING ? 'PRESENT' : 'MISSING');
+  console.log(`🔑 Azure Connection String Length:`, process.env.AZURE_STORAGE_CONNECTION_STRING ? process.env.AZURE_STORAGE_CONNECTION_STRING.length : 0);
+  console.log('='.repeat(50));
+});
+
+// Load environment variables in development
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config();
+}
+
+const express = require('express');
+const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
+const DataService = require('./services/dataService');
+
+console.log('='.repeat(80));
+console.log('🚀 TRAFIKKVAKT SERVER STARTING - DEBUG VERSION 🚀');
+console.log('🔥 DEPLOYMENT TEST - VERSION 2025-09-24-12:35:00 🔥');
+console.log('='.repeat(80));
+console.log('Node.js version:', process.version);
+console.log('Process PID:', process.pid);
+console.log('Working directory:', process.cwd());
+console.log('Environment variables:');
+console.log('  NODE_ENV:', process.env.NODE_ENV);
+console.log('  PORT:', process.env.PORT);
+console.log('  AZURE_STORAGE_CONNECTION_STRING:', process.env.AZURE_STORAGE_CONNECTION_STRING ? `PRESENT (${process.env.AZURE_STORAGE_CONNECTION_STRING.length} chars)` : 'MISSING');
+console.log('  AZURE_TABLE_NAME:', process.env.AZURE_TABLE_NAME || 'NOT SET');
+console.log('='.repeat(80));
+
+const app = express();
+const PORT = process.env.PORT || 3001;
+const isProduction = process.env.NODE_ENV === 'production';
+
+console.log('='.repeat(50));
+console.log('🚀 TRAFIKKVAKT SERVER STARTING 🚀');
+console.log('🔥 DEPLOYMENT TEST - VERSION 2025-09-24-12:30:00 🔥');
+console.log('='.repeat(50));
+console.log('Node.js version:', process.version);
+console.log('Process PID:', process.pid);
+console.log('Working directory:', process.cwd());
+console.log('Environment variables:');
+console.log('  NODE_ENV:', process.env.NODE_ENV);
+console.log('  PORT:', process.env.PORT);
+console.log('  AZURE_STORAGE_CONNECTION_STRING:', process.env.AZURE_STORAGE_CONNECTION_STRING ? '[PRESENT]' : '[MISSING]');
+console.log('  AZURE_STORAGE_CONNECTION_STRING length:', process.env.AZURE_STORAGE_CONNECTION_STRING ? process.env.AZURE_STORAGE_CONNECTION_STRING.length : 0);
+console.log('  AZURE_TABLE_NAME:', process.env.AZURE_TABLE_NAME);
+console.log('='.repeat(50));
+
+const app = express();
+const PORT = process.env.PORT || 3001;
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Create a simpler startup without waiting for async initialization
+console.log('Starting server immediately with basic setup...');
+app.listen(PORT, () => {
+  console.log('='.repeat(50));
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📝 Environment: ${isProduction ? 'production' : 'development'}`);
+  console.log(`� Azure Connection String:`, process.env.AZURE_STORAGE_CONNECTION_STRING ? 'PRESENT' : 'MISSING');
+  console.log('='.repeat(50));
+});
+
+// Global error handlers
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  console.error('Stack:', error.stack);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise);
+  console.error('Reason:', reason);
+});
+
+// Log Node.js version for debugging
+console.log(`Node.js version: ${process.version}`);
+console.log(`Environment: ${isProduction ? 'production' : 'development'}`);
+
+// CORS configuration for local development
+const corsOptions = {
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:3001', 
+    'http://localhost:5173',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3001',
+    'http://127.0.0.1:5173',
+    'https://trafikkvakt.azurewebsites.net'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  optionsSuccessStatus: 200 // For legacy browser support
+};
+
+// Middleware
+app.use(cors(corsOptions));
+app.use(express.json());
+
+// Request logging middleware
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  next();
+});
+
+// Handle preflight OPTIONS requests
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.sendStatus(200);
+});
+
+// API Routes must be defined BEFORE static file serving
+// Get all children
+app.get('/api/children', async (req, res) => {
+  try {
+    const children = await dataService.getChildren();
+    if (children) {
+      // Add Node version info for debugging
+      console.log(`Children API called - Node version: ${process.version}`);
+      res.json(children);
+    } else {
+      res.status(500).json({ error: 'Failed to read children data' });
+    }
+  } catch (error) {
+    console.error('Error getting children:', error);
+    res.status(500).json({ error: 'Failed to read children data' });
+  }
+});
+
+// Get all crossings
+app.get('/api/crossings', async (req, res) => {
+  try {
+    const crossings = await dataService.getCrossings();
+    if (crossings) {
+      res.json(crossings);
+    } else {
+      res.status(500).json({ error: 'Failed to read crossings data' });
+    }
+  } catch (error) {
+    console.error('Error getting crossings:', error);
+    res.status(500).json({ error: 'Failed to read crossings data' });
+  }
+});
+
+// Get schedule configuration
+app.get('/api/schedule', async (req, res) => {
+  try {
+    const schedule = await dataService.getSchedule();
+    if (schedule) {
+      res.json(schedule);
+    } else {
+      res.status(500).json({ error: 'Failed to read schedule data' });
+    }
+  } catch (error) {
+    console.error('Error getting schedule:', error);
+    res.status(500).json({ error: 'Failed to read schedule data' });
+  }
+});
+
+// Debug endpoint to inspect crossings data
+app.get('/api/debug/crossings', async (req, res) => {
+  try {
+    const crossings = await dataService.getCrossings();
+    console.log('Debug crossings raw:', crossings);
+    console.log('Debug crossings JSON:', JSON.stringify(crossings));
+    
+    const crossingsList = crossings.crossings || [];
+    console.log('Debug crossings list:', crossingsList);
+    console.log('Debug crossings list JSON:', JSON.stringify(crossingsList));
+    
+    res.json({
+      raw: crossings,
+      list: crossingsList,
+      types: crossingsList.map(c => typeof c),
+      names: crossingsList.map(c => c?.name || 'NO_NAME')
+    });
+  } catch (error) {
+    console.error('Debug crossings error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all duties
+app.get('/api/duties', async (req, res) => {
+  try {
+    console.log('=== DUTIES API DEBUG ===');
+    console.log('Azure Connection String present:', !!process.env.AZURE_STORAGE_CONNECTION_STRING);
+    console.log('Table name:', process.env.AZURE_TABLE_NAME);
+    console.log('Using Azure Storage:', dataService.isUsingAzure());
+    console.log('=======================');
+    
+    const duties = await dataService.getDuties();
+    if (duties) {
+      res.json(duties);
+    } else {
+      res.status(500).json({ error: 'Failed to read duties data' });
+    }
+  } catch (error) {
+    console.error('Error getting duties:', error);
+    res.status(500).json({ error: 'Failed to read duties data' });
+  }
+});
+
+// Auto-fill duties with fair distribution
+app.post('/api/duties/auto-fill', async (req, res) => {
+  try {
+    const children = await dataService.getChildren();
+    const crossings = await dataService.getCrossings();
+    
+    // Debug: Log what we actually read
+    console.log('Raw children data:', JSON.stringify(children));
+    console.log('Raw crossings data:', JSON.stringify(crossings));
+    
+    if (!children || !crossings) {
+      return res.status(500).json({ error: 'Failed to read configuration data' });
+    }
+
+    const childrenList = children.children || [];
+    
+    // Deep clone crossings to avoid any reference issues (Node 22 compatibility)
+    const crossingsRaw = crossings.crossings || [];
+    console.log('crossingsRaw type and content:', typeof crossingsRaw, JSON.stringify(crossingsRaw));
+    
+    // Use a more compatible cloning approach for Node 22
+    const crossingsList = [];
+    for (let i = 0; i < crossingsRaw.length; i++) {
+      if (crossingsRaw[i]) {
+        crossingsList.push({
+          name: String(crossingsRaw[i].name || ''),
+          googleMapsLink: String(crossingsRaw[i].googleMapsLink || '')
+        });
+      }
+    }
+    console.log('crossingsList after manual cloning:', JSON.stringify(crossingsList));
+    
+    // Debug: Log the extracted arrays
+    console.log('Children list:', JSON.stringify(childrenList));
+    console.log('Crossings list after clone:', JSON.stringify(crossingsList));
+    
+    const days = ['Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag'];
+
+    console.log('Auto-fill started:', {
+      children: childrenList.length,
+      crossings: crossingsList.length,
+      totalSlots: crossingsList.length * days.length,
+      crossingsData: crossingsList
+    });
+
+    if (childrenList.length === 0 || crossingsList.length === 0) {
+      return res.status(400).json({ error: 'No children or crossings configured' });
+    }
+
+    // Create a simpler, more robust distribution algorithm
+    const duties = {};
+    const childDutyCount = {};
+    
+    // Initialize duty count for each child
+    childrenList.forEach(child => {
+      childDutyCount[child] = 0;
+    });
+
+    // Convert crossings to simple names array - SIMPLIFIED VERSION
+    const crossingNames = [];
+    
+    console.log('crossingsList type and length:', typeof crossingsList, crossingsList.length);
+    console.log('crossingsList contents:', JSON.stringify(crossingsList, null, 2));
+    
+    crossingsList.forEach((crossing, index) => {
+      console.log(`Processing crossing ${index}:`, typeof crossing, crossing);
+      
+      if (crossing && typeof crossing === 'object' && crossing.name) {
+        const name = String(crossing.name).trim();
+        if (name) {
+          crossingNames.push(name);
+          console.log(`Added crossing name: "${name}"`);
+        } else {
+          console.error(`Empty name for crossing ${index}:`, crossing);
+        }
+      } else if (typeof crossing === 'string' && crossing.trim()) {
+        crossingNames.push(crossing.trim());
+        console.log(`Added string crossing: "${crossing.trim()}"`);
+      } else {
+        console.error(`Invalid crossing at ${index}:`, typeof crossing, crossing);
+      }
+    });
+    
+    console.log('Raw crossings before processing:', JSON.stringify(crossingsList, null, 2));
+    console.log('Extracted crossing names (Node 22 compatible):', crossingNames);
+    console.log('Number of crossing names extracted:', crossingNames.length);
+    
+    if (crossingNames.length === 0) {
+      return res.status(400).json({ error: 'No valid crossing names could be extracted' });
+    }
+    
+    console.log('Extracted crossing names (Node 22 compatible):', crossingNames);
+
+    // Shuffle the crossing names and days to add randomness - Node 22 compatible
+    console.log('crossingNames before shuffling:', JSON.stringify(crossingNames));
+    
+    // More compatible shuffling approach for Node 22
+    const shuffledCrossingNames = [];
+    const tempCrossings = [];
+    for (let i = 0; i < crossingNames.length; i++) {
+      tempCrossings.push(String(crossingNames[i]));
+    }
+    
+    // Fisher-Yates shuffle
+    for (let i = tempCrossings.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const temp = tempCrossings[i];
+      tempCrossings[i] = tempCrossings[j];
+      tempCrossings[j] = temp;
+    }
+    shuffledCrossingNames.push(...tempCrossings);
+    
+    console.log('shuffledCrossingNames after shuffling:', JSON.stringify(shuffledCrossingNames));
+    const shuffledDays = [...days].sort(() => Math.random() - 0.5);
+
+    // Assign duties fairly with randomization - DEBUGGING VERSION
+    console.log('About to iterate shuffledCrossingNames:', shuffledCrossingNames);
+    shuffledCrossingNames.forEach((crossingName, index) => {
+      console.log(`=== Processing crossing ${index} ===`);
+      console.log('crossingName type:', typeof crossingName);
+      console.log('crossingName value:', JSON.stringify(crossingName));
+      console.log('crossingName toString():', String(crossingName));
+      try {
+        console.log(`Processing crossing ${index}: "${crossingName}" (type: ${typeof crossingName})`);
+        
+        // Ensure crossingName is a valid string
+        if (typeof crossingName !== 'string' || crossingName.length === 0) {
+          console.error(`Invalid crossing name at index ${index}:`, crossingName);
+          return; // Skip this crossing
+        }
+        
+        duties[crossingName] = {};
+      
+      
+        
+        shuffledDays.forEach(day => {
+          // First try: Find children not assigned to this day at another crossing
+          let availableChildren = childrenList.filter(child => {
+            return !Object.values(duties).some(crossingDuties => 
+              crossingDuties[day] === child
+            );
+          });
+
+          // If no children available (e.g., more crossings than children), 
+          // allow assignment anyway but prefer children with fewer duties
+          if (availableChildren.length === 0) {
+            availableChildren = [...childrenList];
+          }
+
+          if (availableChildren.length > 0) {
+            // Sort by duty count (ascending) to ensure fairness
+            availableChildren.sort((a, b) => childDutyCount[a] - childDutyCount[b]);
+            
+            // Get all children with the minimum duty count for randomization
+            const minDutyCount = childDutyCount[availableChildren[0]];
+            const candidatesWithMinDuties = availableChildren.filter(child => 
+              childDutyCount[child] === minDutyCount
+            );
+            
+            // Randomly select from candidates with minimum duties
+            const randomIndex = Math.floor(Math.random() * candidatesWithMinDuties.length);
+            const selectedChild = candidatesWithMinDuties[randomIndex];
+            
+            duties[crossingName][day] = selectedChild;
+            childDutyCount[selectedChild]++;
+          }
+        });
+      } catch (error) {
+        console.error('Error processing crossing:', crossingName, error);
+      }
+    });    // Save the generated duties
+    const success = await dataService.storeDuties({ duties });
+    
+    console.log('Auto-fill completed:', {
+      success,
+      assignedSlots: Object.values(duties).reduce((total, crossing) => 
+        total + Object.values(crossing).filter(child => child).length, 0
+      ),
+      distribution: childDutyCount
+    });
+    
+    if (success) {
+      res.json({ 
+        message: 'Duties auto-filled successfully',
+        duties: { duties }, // Match the saved file structure
+        distribution: childDutyCount,
+        deploymentVersion: 'v2025-09-24-10:10-FIXED-OBJECT-KEYS',
+        nodeVersion: process.version,
+        extractedCrossingNames: crossingNames
+      });
+    } else {
+      res.status(500).json({ error: 'Failed to save auto-filled duties' });
+    }
+  } catch (error) {
+    console.error('Auto-fill error:', error);
+    res.status(500).json({ error: 'Failed to auto-fill duties' });
+  }
+});
+
+// Update duties (for drag and drop swapping)
+app.put('/api/duties', async (req, res) => {
+  try {
+    const success = await dataService.storeDuties(req.body);
+    if (success) {
+      res.json({ message: 'Duties updated successfully' });
+    } else {
+      res.status(500).json({ error: 'Failed to update duties' });
+    }
+  } catch (error) {
+    console.error('Error updating duties:', error);
+    res.status(500).json({ error: 'Failed to update duties' });
+  }
+});
+
+// Update children list
+app.put('/api/children', async (req, res) => {
+  try {
+    const success = await dataService.storeChildren(req.body);
+    if (success) {
+      res.json({ message: 'Children updated successfully' });
+    } else {
+      res.status(500).json({ error: 'Failed to update children' });
+    }
+  } catch (error) {
+    console.error('Error updating children:', error);
+    res.status(500).json({ error: 'Failed to update children' });
+  }
+});
+
+// Update crossings list
+app.put('/api/crossings', async (req, res) => {
+  try {
+    const success = await dataService.storeCrossings(req.body);
+    if (success) {
+      res.json({ message: 'Crossings updated successfully' });
+    } else {
+      res.status(500).json({ error: 'Failed to update crossings' });
+    }
+  } catch (error) {
+    console.error('Error updating crossings:', error);
+    res.status(500).json({ error: 'Failed to update crossings' });
+  }
+});
+
+// Update schedule configuration
+app.put('/api/schedule', async (req, res) => {
+  try {
+    const success = await dataService.storeSchedule(req.body);
+    if (success) {
+      res.json({ message: 'Schedule updated successfully' });
+    } else {
+      res.status(500).json({ error: 'Failed to update schedule' });
+    }
+  } catch (error) {
+    console.error('Error updating schedule:', error);
+    res.status(500).json({ error: 'Failed to update schedule' });
+  }
+});
+
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(), 
+    port: PORT || process.env.PORT || '8080',
+    nodeVersion: process.version,
+    environment: isProduction ? 'production' : 'development',
+    deploymentTest: 'v2025-09-24-12:23:00-SIMPLE-STARTUP-DEBUG',
+    pid: process.pid,
+    azureConnectionStringPresent: !!process.env.AZURE_STORAGE_CONNECTION_STRING,
+    azureConnectionStringLength: process.env.AZURE_STORAGE_CONNECTION_STRING ? process.env.AZURE_STORAGE_CONNECTION_STRING.length : 0,
+    azureTableName: process.env.AZURE_TABLE_NAME || 'trafikkvakt',
+    dataServiceInitialized: dataService ? dataService.initialized : false,
+    dataServiceUseAzure: dataService ? dataService.useAzure : false
+  });
+});
+
+// Azure Table Storage test endpoint
+app.get('/api/test/azure-storage', async (req, res) => {
+  try {
+    const isUsingAzure = dataService.isUsingAzure();
+    const connectionStringPresent = !!process.env.AZURE_STORAGE_CONNECTION_STRING;
+    const connectionStringLength = process.env.AZURE_STORAGE_CONNECTION_STRING ? process.env.AZURE_STORAGE_CONNECTION_STRING.length : 0;
+    const azureServiceEnabled = dataService.azureService.isEnabled;
+    const azureServiceInitialized = dataService.azureService.initialized;
+    
+    console.log('=== AZURE DEBUG INFO ===');
+    console.log('Connection string present:', connectionStringPresent);
+    console.log('Connection string length:', connectionStringLength);
+    console.log('Azure service enabled:', azureServiceEnabled);
+    console.log('Azure service initialized:', azureServiceInitialized);
+    console.log('Data service using Azure:', isUsingAzure);
+    
+    res.json({
+      isUsingAzure,
+      connectionStringPresent,
+      connectionStringLength,
+      azureServiceEnabled,
+      azureServiceInitialized,
+      dataServiceUseAzure: dataService.useAzure,
+      environment: process.env.NODE_ENV,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Azure storage test error:', error);
+    res.status(500).json({ 
+      error: 'Azure storage test failed', 
+      message: error.message,
+      stack: error.stack 
+    });
+  }
+});
+
+// Simple test endpoint that doesn't read files
+app.get('/api/test-deployment', (req, res) => {
+  res.json({
+    message: 'Deployment test successful!',
+    timestamp: new Date().toISOString(),
+    nodeVersion: process.version,
+    deploymentVersion: 'v2025-09-24-AZURE-STORAGE-TEST',
+    environment: process.env.NODE_ENV,
+    port: process.env.PORT,
+    cwd: process.cwd(),
+    storageConnectionPresent: !!process.env.AZURE_STORAGE_CONNECTION_STRING,
+    storageTableName: process.env.AZURE_TABLE_NAME
+  });
+});
+
+// Debug endpoint to verify deployment and test crossing processing
+app.get('/api/debug/crossings-test', async (req, res) => {
+  try {
+    const crossings = await dataService.getCrossings();
+    const crossingsRaw = crossings.crossings || [];
+    
+    // Test the crossing processing logic
+    const crossingsList = [];
+    for (let i = 0; i < crossingsRaw.length; i++) {
+      if (crossingsRaw[i]) {
+        crossingsList.push({
+          name: String(crossingsRaw[i].name || ''),
+          googleMapsLink: String(crossingsRaw[i].googleMapsLink || '')
+        });
+      }
+    }
+    
+    // Test crossing name extraction
+    const crossingNames = [];
+    crossingsList.forEach((crossing, index) => {
+      if (crossing && typeof crossing === 'object' && crossing.name) {
+        const name = String(crossing.name).trim();
+        if (name) {
+          crossingNames.push(name);
+        }
+      }
+    });
+    
+    res.json({
+      deploymentVersion: 'v2025-09-24-DEBUG-TEST-v1',
+      nodeVersion: process.version,
+      timestamp: new Date().toISOString(),
+      rawCrossingsCount: crossingsRaw.length,
+      processedCrossingsCount: crossingsList.length,
+      extractedNamesCount: crossingNames.length,
+      crossingNames: crossingNames,
+      testMessage: 'Debug endpoint working - changes are deployed!'
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: error.message,
+      deploymentVersion: 'v2025-09-24-DEBUG-TEST-v1',
+      testMessage: 'Debug endpoint error'
+    });
+  }
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ error: 'Something went wrong!' });
+});
+
+// Serve React app for all non-API routes in production
+if (isProduction) {
+  // Serve static files from client directory (deployed structure)
+  app.use(express.static(path.join(process.cwd(), 'client')));
+  
+  // Handle all other routes by serving the React app
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(process.cwd(), 'client', 'index.html'));
+  });
+} else {
+  // 404 handler for development
+  app.use('*', (req, res) => {
+    res.status(404).json({ error: 'Route not found' });
+  });
+}
+
+console.log('Server startup simplified for debugging...');
+
+// Commented out complex async startup for debugging
+// startServer().catch(error => {
+//   console.error('Failed to start server:', error);
+//   process.exit(1);
+// });
+
+module.exports = app;

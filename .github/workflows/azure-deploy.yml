@@ -1,0 +1,62 @@
+name: Deploy to Azure App Service
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  AZURE_WEBAPP_NAME: trafikkvakt
+  AZURE_WEBAPP_PACKAGE_PATH: '.'
+  NODE_VERSION: '20'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: |
+        cd client && npm ci
+        cd ../server && npm ci
+    
+    - name: Build client
+      run: |
+        cd client && npm run build
+    
+    - name: Create deployment artifact
+      run: |
+        mkdir deployment
+        cp -r client/dist deployment/client
+        cp -r server deployment/server
+        cp -r config deployment/config
+        cp package.json deployment/
+        # Create production package.json for Azure
+        cat > deployment/package.json << 'EOF'
+        {
+          "name": "trafikkvakt",
+          "version": "1.0.0",
+          "main": "server/index.js",
+          "scripts": {
+            "start": "cd server && npm install --production && node index.js"
+          },
+          "engines": {
+            "node": ">=20.0.0"
+          }
+        }
+        EOF
+    
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v2
+      with:
+        app-name: ${{ env.AZURE_WEBAPP_NAME }}
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        package: deployment

@@ -83,3 +83,17 @@ jspm_packages/
 
 # Azure specific
 .azure/
+
+# Deployment and temp files
+deploy.zip
+*.zip
+logs/
+logs-debug/
+trafikkvakt-deployment-logs/
+temp_deploy_test/
+assets/
+index.html
+
+# Environment files
+.env
+.env.production

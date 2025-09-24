@@ -1,0 +1,27 @@
+{
+  "name": "trafikkvakt",
+  "version": "1.0.0",
+  "description": "Holmen Skole 4C Trafikkvakt - Traffic warden duty management system",
+  "main": "server/index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\"",
+    "server:dev": "cd server && npm run dev",
+    "client:dev": "cd client && npm run dev",
+    "build": "cd client && npm run build && xcopy /E /I dist ..\\",
+    "start": "node server/src/index.js",
+    "install:all": "npm install && cd server && npm install && cd ../client && npm install",
+    "test": "cd client && npm test",
+    "deploy": "./deploy.sh",
+    "postinstall": "cd server && npm install && cd ../client && npm install && npm run build"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=8.0.0"
+  },
+  "keywords": ["traffic", "warden", "school", "duties", "management"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
