@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { usePolling } from '../hooks/usePolling';
 
 interface DutyData {
   duties: {
@@ -94,6 +95,8 @@ export function DutyGrid() {
   const [schedule, setSchedule] = useState<ScheduleConfig | null>(null);
   const [crossings, setCrossings] = useState<Crossing[]>([]);
   const [children, setChildren] = useState<string[]>([]);
+  const [lastDataVersion, setLastDataVersion] = useState<string>('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [draggedData, setDraggedData] = useState<{
     child: string;
     crossing: string;
@@ -122,6 +125,29 @@ export function DutyGrid() {
   
   // Selection state for highlighting duties
   const [selectedChildForHighlight, setSelectedChildForHighlight] = useState<string | null>(null);
+
+  // Function to check for data updates
+  const checkForUpdates = async () => {
+    try {
+      const response = await fetch('/api/data-version');
+      const data = await response.json();
+      
+      if (lastDataVersion && data.lastUpdate !== lastDataVersion) {
+        console.log('Data update detected, refreshing UI...');
+        setIsRefreshing(true);
+        await loadData();
+        setIsRefreshing(false);
+      }
+      
+      setLastDataVersion(data.lastUpdate);
+    } catch (error) {
+      console.error('Error checking for updates:', error);
+      setIsRefreshing(false);
+    }
+  };
+
+  // Set up fast polling for near real-time updates (check every 2 seconds)
+  usePolling(checkForUpdates, 2000, !loading);
 
   useEffect(() => {
     loadData();
@@ -172,6 +198,18 @@ export function DutyGrid() {
       setSchedule(scheduleData);
       setCrossings(crossingsData.crossings || []);
       setChildren(childrenData.children || []);
+
+      // Get initial data version after first load
+      if (!lastDataVersion) {
+        try {
+          const versionRes = await fetch('/api/data-version');
+          const versionData = await versionRes.json();
+          setLastDataVersion(versionData.lastUpdate);
+          console.log('DutyGrid: Set initial data version:', versionData.lastUpdate);
+        } catch (error) {
+          console.error('Error getting initial data version:', error);
+        }
+      }
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -433,6 +471,26 @@ export function DutyGrid() {
     });
   };
 
+  const isTodaysColumn = (dayName: string) => {
+    if (!schedule?.startDate) return false;
+    
+    const startDate = new Date(schedule.startDate);
+    const dayIndex = DAYS.indexOf(dayName);
+    
+    if (dayIndex === -1) return false;
+    
+    // Add the day index to get the correct date
+    const targetDate = new Date(startDate);
+    targetDate.setDate(startDate.getDate() + dayIndex);
+    
+    // Get today's date (without time)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    targetDate.setHours(0, 0, 0, 0);
+    
+    return targetDate.getTime() === today.getTime();
+  };
+
   const handleAddChild = (crossing: string, day: string) => {
     if (selectedChild.trim() && duties) {
       const newDuties = { ...duties };
@@ -466,6 +524,11 @@ export function DutyGrid() {
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
           Holmen Skole 4C Trafikkvakt
+          {isRefreshing && (
+            <span className="ml-3 text-sm bg-blue-100 text-blue-600 px-2 py-1 rounded animate-pulse">
+              Oppdaterer...
+            </span>
+          )}
         </h1>
         {schedule && (
           <p className="text-gray-600">
@@ -488,11 +551,17 @@ export function DutyGrid() {
                     {DAYS.map((day) => (
                       <th
                         key={day}
-                        className="px-4 py-3 text-center text-sm font-semibold text-gray-900"
+                        className={`px-4 py-3 text-center text-sm font-semibold text-gray-900 ${
+                          isTodaysColumn(day) ? 'bg-blue-100 border-b-4 border-blue-500' : ''
+                        }`}
                       >
                         <div className="flex flex-col">
-                          <span>{day}</span>
-                          <span className="text-xs text-gray-500 font-normal">
+                          <span className={isTodaysColumn(day) ? 'text-blue-900 font-bold' : ''}>
+                            {day}
+                          </span>
+                          <span className={`text-xs font-normal ${
+                            isTodaysColumn(day) ? 'text-blue-700' : 'text-gray-500'
+                          }`}>
                             {getDateForDay(day)}
                           </span>
                         </div>
@@ -520,7 +589,9 @@ export function DutyGrid() {
                         return (
                           <td
                             key={day}
-                            className="px-4 py-4 text-center relative"
+                            className={`px-4 py-4 text-center relative ${
+                              isTodaysColumn(day) ? 'bg-blue-50 border-l-2 border-r-2 border-blue-200' : ''
+                            }`}
                             onDragOver={handleDragOver}
                             onDrop={(e) => handleDrop(e, crossing.name, day)}
                             data-crossing={crossing.name}

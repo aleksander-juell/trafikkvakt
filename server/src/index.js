@@ -8,6 +8,7 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const DataService = require('./services/dataService');
+const SSEManager = require('./services/SSEManager');
 
 console.log('='.repeat(80));
 console.log('🚀 TRAFIKKVAKT SERVER STARTING - WITH AZURE INTEGRATION 🚀');
@@ -41,9 +42,17 @@ app.listen(PORT, () => {
 // Create DataService after server starts
 console.log('Creating DataService with Azure integration...');
 let dataService = null;
+let sseManager = null;
 try {
   dataService = new DataService();
   console.log('DataService created successfully');
+  try {
+    sseManager = new SSEManager();
+    console.log('SSEManager created successfully');
+  } catch (sseError) {
+    console.error('SSEManager creation failed:', sseError);
+    console.log('Continuing without real-time updates...');
+  }
 } catch (error) {
   console.error('DataService creation failed:', error);
 }
@@ -103,6 +112,59 @@ app.get('/api/health', (req, res) => {
     deploymentTest: 'v2025-09-24-13:10:00-FRONTEND-STATIC-FILES-FIXED',
     pid: process.pid,
     ...azureDebug
+  });
+});
+
+// Data version endpoint for change tracking
+let lastDataUpdate = new Date().toISOString();
+
+app.get('/api/data-version', (req, res) => {
+  res.json({ 
+    lastUpdate: lastDataUpdate,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Server-Sent Events endpoint for real-time updates
+app.get('/api/events', (req, res) => {
+  // Set SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Cache-Control'
+  });
+
+  let client = null;
+  try {
+    client = sseManager ? sseManager.addClient(res) : null;
+    console.log('SSE client connected');
+  } catch (error) {
+    console.error('Error adding SSE client:', error);
+    res.write(`data: ${JSON.stringify({type: 'error', message: 'Failed to connect'})}\n\n`);
+  }
+
+  // Handle client disconnect
+  req.on('close', () => {
+    if (client && sseManager) {
+      try {
+        sseManager.removeClient(client);
+      } catch (error) {
+        console.error('Error removing SSE client:', error);
+      }
+    }
+    console.log('SSE client disconnected');
+  });
+
+  req.on('aborted', () => {
+    if (client && sseManager) {
+      try {
+        sseManager.removeClient(client);
+      } catch (error) {
+        console.error('Error removing SSE client on abort:', error);
+      }
+    }
   });
 });
 
@@ -187,7 +249,22 @@ app.put('/api/duties', async (req, res) => {
     if (dataService) {
       const success = await dataService.storeDuties(req.body);
       if (success) {
+        lastDataUpdate = new Date().toISOString();
         console.log('Duties updated successfully via DataService (Azure or JSON)');
+        
+        // Broadcast real-time update to all connected clients
+        if (sseManager) {
+          try {
+            sseManager.notifyDutyUpdate({
+              type: 'duties-updated',
+              data: req.body,
+              timestamp: lastDataUpdate
+            });
+          } catch (broadcastError) {
+            console.error('Error broadcasting SSE update:', broadcastError);
+          }
+        }
+        
         res.json({ success: true });
       } else {
         res.status(500).json({ error: 'Failed to save duties via DataService' });
@@ -196,7 +273,22 @@ app.put('/api/duties', async (req, res) => {
       // Fallback to direct file write
       const dutiesPath = path.join(__dirname, '../../config/duties.json');
       fs.writeFileSync(dutiesPath, JSON.stringify(req.body, null, 2));
+      lastDataUpdate = new Date().toISOString();
       console.log('Duties updated successfully via direct file write');
+      
+      // Broadcast real-time update to all connected clients
+      if (sseManager) {
+        try {
+          sseManager.notifyDutyUpdate({
+            type: 'duties-updated',
+            data: req.body,
+            timestamp: lastDataUpdate
+          });
+        } catch (broadcastError) {
+          console.error('Error broadcasting SSE update:', broadcastError);
+        }
+      }
+      
       res.json({ success: true });
     }
   } catch (error) {
@@ -250,7 +342,18 @@ app.post('/api/duties/auto-fill', async (req, res) => {
     if (dataService) {
       const success = await dataService.storeDuties(newDuties);
       if (success) {
+        lastDataUpdate = new Date().toISOString();
         console.log('Auto-fill completed successfully via DataService');
+        
+        // Broadcast real-time update to all connected clients
+        if (sseManager) {
+          sseManager.notifyDutyUpdate({
+            type: 'duties-auto-filled',
+            data: newDuties,
+            timestamp: lastDataUpdate
+          });
+        }
+        
         res.json({ success: true, distribution, duties: newDuties });
       } else {
         res.status(500).json({ error: 'Failed to save auto-filled duties' });
@@ -259,7 +362,18 @@ app.post('/api/duties/auto-fill', async (req, res) => {
       // Fallback to direct file write
       const dutiesPath = path.join(__dirname, '../../config/duties.json');
       fs.writeFileSync(dutiesPath, JSON.stringify(newDuties, null, 2));
+      lastDataUpdate = new Date().toISOString();
       console.log('Auto-fill completed successfully via direct file write');
+      
+      // Broadcast real-time update to all connected clients
+      if (sseManager) {
+        sseManager.notifyDutyUpdate({
+          type: 'duties-auto-filled',
+          data: newDuties,
+          timestamp: lastDataUpdate
+        });
+      }
+      
       res.json({ success: true, distribution, duties: newDuties });
     }
   } catch (error) {
