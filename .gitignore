@@ -97,3 +97,9 @@ index.html
 # Environment files
 .env
 .env.production
+
+# WhatsApp session and test files
+**/whatsapp-session/
+**/test-session/
+test-*.js
+whatsapp-*.html

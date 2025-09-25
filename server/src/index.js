@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const DataService = require('./services/dataService');
 const SSEManager = require('./services/SSEManager');
+const NotificationScheduler = require('./services/notificationScheduler');
 
 console.log('='.repeat(80));
 console.log('🚀 TRAFIKKVAKT SERVER STARTING - WITH AZURE INTEGRATION 🚀');
@@ -43,6 +44,7 @@ app.listen(PORT, () => {
 console.log('Creating DataService with Azure integration...');
 let dataService = null;
 let sseManager = null;
+let notificationScheduler = null;
 try {
   dataService = new DataService();
   console.log('DataService created successfully');
@@ -52,6 +54,15 @@ try {
   } catch (sseError) {
     console.error('SSEManager creation failed:', sseError);
     console.log('Continuing without real-time updates...');
+  }
+  
+  // Initialize notification scheduler
+  try {
+    notificationScheduler = new NotificationScheduler(dataService);
+    console.log('NotificationScheduler created successfully');
+  } catch (notificationError) {
+    console.error('NotificationScheduler creation failed:', notificationError);
+    console.log('Continuing without notifications...');
   }
 } catch (error) {
   console.error('DataService creation failed:', error);
@@ -90,6 +101,23 @@ app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
   next();
 });
+
+// Set scheduler instance for routes
+if (notificationScheduler) {
+  app.set('notificationScheduler', notificationScheduler);
+}
+
+// Set dataService for routes
+if (dataService) {
+  app.set('dataService', dataService);
+}
+
+// WhatsApp Business and notification routes
+const whatsappBusinessRoutes = require('./routes/whatsappBusiness');
+const notificationRoutes = require('./routes/notifications');
+
+app.use('/api/whatsapp-business', whatsappBusinessRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Enhanced health endpoint with Azure diagnostics
 app.get('/api/health', (req, res) => {
@@ -494,4 +522,22 @@ if (isProduction) {
 }
 
 console.log('Server setup complete with Azure integration!');
+
+// Initialize notification services after server is fully set up
+setTimeout(async () => {
+  try {
+    console.log('Initializing notification services...');
+    
+    // Start notification scheduler if enabled
+    if (notificationScheduler && process.env.WHATSAPP_NOTIFICATIONS_ENABLED === 'true') {
+      console.log('Starting notification scheduler...');
+      notificationScheduler.start();
+    }
+    
+    console.log('✅ All services initialized successfully');
+  } catch (error) {
+    console.error('❌ Error initializing services:', error);
+  }
+}, 5000); // Wait 5 seconds for server to be fully ready
+
 module.exports = app;
