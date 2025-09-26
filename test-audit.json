@@ -1,0 +1,9 @@
+{
+  "fromChild": "Emma",
+  "toChild": "Liam",
+  "fromCrossing": "Hovedgata",
+  "fromDay": "Mandag",
+  "toCrossing": "Skolegata",
+  "toDay": "Tirsdag",
+  "swapType": "swap"
+}

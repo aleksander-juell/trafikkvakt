@@ -252,6 +252,101 @@ class AzureTableService {
     }
   }
 
+  // Store audit log entry
+  async storeAuditLogEntry(entry) {
+    if (!this.isEnabled) {
+      throw new Error('Azure Table Storage is not enabled');
+    }
+
+    try {
+      // Use timestamp as rowKey for unique entries and chronological order
+      const entity = {
+        partitionKey: 'auditlog',
+        rowKey: Date.now().toString(), // Unique timestamp-based key
+        fromChild: entry.fromChild,
+        toChild: entry.toChild,
+        fromCrossing: entry.fromCrossing,
+        fromDay: entry.fromDay,
+        toCrossing: entry.toCrossing,
+        toDay: entry.toDay,
+        swapType: entry.swapType, // 'swap' or 'move'
+        timestamp: new Date().toISOString(),
+        createdAt: new Date()
+      };
+
+      await this.tableClient.createEntity(entity);
+      console.log('Audit log entry stored successfully in Azure Table Storage');
+      return true;
+    } catch (error) {
+      console.error('Failed to store audit log entry in Azure Table Storage:', error);
+      throw error;
+    }
+  }
+
+  // Retrieve audit log data
+  async getAuditLog() {
+    if (!this.isEnabled) {
+      throw new Error('Azure Table Storage is not enabled');
+    }
+
+    try {
+      const entities = this.tableClient.listEntities({
+        queryOptions: { filter: `PartitionKey eq 'auditlog'` }
+      });
+
+      const auditEntries = [];
+      for await (const entity of entities) {
+        auditEntries.push({
+          id: entity.rowKey,
+          fromChild: entity.fromChild,
+          toChild: entity.toChild || '', // Empty for moves
+          fromCrossing: entity.fromCrossing,
+          fromDay: entity.fromDay,
+          toCrossing: entity.toCrossing,
+          toDay: entity.toDay,
+          swapType: entity.swapType,
+          timestamp: entity.timestamp
+        });
+      }
+
+      // Sort by timestamp (newest first)
+      auditEntries.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+      console.log(`Retrieved ${auditEntries.length} audit log entries from Azure Table Storage`);
+      return { auditLog: auditEntries };
+    } catch (error) {
+      console.error('Failed to retrieve audit log from Azure Table Storage:', error);
+      throw error;
+    }
+  }
+
+  // Clear audit log
+  async clearAuditLog() {
+    if (!this.isEnabled) {
+      throw new Error('Azure Table Storage is not enabled');
+    }
+
+    try {
+      const entities = this.tableClient.listEntities({
+        queryOptions: { filter: `PartitionKey eq 'auditlog'` }
+      });
+
+      const deletePromises = [];
+      for await (const entity of entities) {
+        deletePromises.push(
+          this.tableClient.deleteEntity(entity.partitionKey, entity.rowKey)
+        );
+      }
+
+      await Promise.all(deletePromises);
+      console.log('Audit log cleared successfully from Azure Table Storage');
+      return true;
+    } catch (error) {
+      console.error('Failed to clear audit log from Azure Table Storage:', error);
+      throw error;
+    }
+  }
+
   // Health check
   isAvailable() {
     return this.isEnabled;

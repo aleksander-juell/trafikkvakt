@@ -348,6 +348,16 @@ app.post('/api/duties/auto-fill', async (req, res) => {
       }
     }
     
+    // Clear audit log when auto-fill is performed
+    if (dataService) {
+      try {
+        await dataService.clearAuditLog();
+        console.log('Audit log cleared after auto-fill');
+      } catch (error) {
+        console.error('Error clearing audit log after auto-fill:', error);
+      }
+    }
+    
     // Save the auto-filled duties
     await dataService.storeDuties(newDuties);
     lastDataUpdate = new Date().toISOString();
@@ -429,6 +439,53 @@ app.put('/api/schedule', async (req, res) => {
   } catch (error) {
     console.error('Error saving schedule:', error);
     res.status(500).json({ error: 'Failed to save schedule to Azure Table Storage' });
+  }
+});
+
+// Get audit log
+app.get('/api/audit-log', async (req, res) => {
+  try {
+    if (!dataService) {
+      return res.status(500).json({ error: 'Data service not available' });
+    }
+    
+    const auditLog = await dataService.getAuditLog();
+    res.json(auditLog);
+  } catch (error) {
+    console.error('Error getting audit log:', error);
+    res.status(500).json({ error: 'Failed to read audit log from Azure Table Storage' });
+  }
+});
+
+// Add audit log entry
+app.post('/api/audit-log', async (req, res) => {
+  try {
+    if (!dataService) {
+      return res.status(500).json({ error: 'Data service not available' });
+    }
+    
+    await dataService.storeAuditLogEntry(req.body);
+    console.log('Audit log entry stored successfully');
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error storing audit log entry:', error);
+    res.status(500).json({ error: 'Failed to store audit log entry to Azure Table Storage' });
+  }
+});
+
+// Clear audit log
+app.delete('/api/audit-log', async (req, res) => {
+  try {
+    if (!dataService) {
+      return res.status(500).json({ error: 'Data service not available' });
+    }
+    
+    await dataService.clearAuditLog();
+    console.log('Audit log cleared successfully');
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error clearing audit log:', error);
+    res.status(500).json({ error: 'Failed to clear audit log in Azure Table Storage' });
   }
 });
 

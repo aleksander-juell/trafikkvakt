@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { AuditLog } from './AuditLog';
 
 interface Crossing {
   name: string;
@@ -19,6 +20,7 @@ export function ConfigPage() {
   const [newCrossingLink, setNewCrossingLink] = useState('');
   const [isAutoFilling, setIsAutoFilling] = useState(false);
   const [autoFillMessage, setAutoFillMessage] = useState('');
+  const [auditLogKey, setAuditLogKey] = useState(0);
 
   useEffect(() => {
     loadConfig();
@@ -149,6 +151,8 @@ export function ConfigPage() {
         // Add a small delay to ensure file operations are complete
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('autoFillComplete'));
+          // Force refresh of audit log component since it was cleared
+          setAuditLogKey(prev => prev + 1);
         }, 100);
       } else {
         const error = await response.json();
@@ -341,6 +345,9 @@ export function ConfigPage() {
             )}
           </div>
         </div>
+
+        {/* Audit Log */}
+        <AuditLog key={auditLogKey} />
       </div>
     </div>
   );

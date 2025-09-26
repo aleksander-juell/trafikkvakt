@@ -248,20 +248,35 @@ export function DutyGrid() {
       if (!newDuties.duties[targetCrossing]) {
         newDuties.duties[targetCrossing] = {};
       }
+
+      // Prepare audit log entry
+      const auditEntry: any = {
+        fromChild: draggedData.child,
+        fromCrossing: draggedData.crossing,
+        fromDay: draggedData.day,
+        toCrossing: targetCrossing,
+        toDay: targetDay,
+        swapType: targetChild ? 'swap' : 'move'
+      };
       
       // Perform the swap
       newDuties.duties[targetCrossing][targetDay] = draggedData.child;
       
       if (targetChild) {
         // If target cell had a child, move it to the source cell
+        auditEntry.toChild = targetChild;
         newDuties.duties[draggedData.crossing][draggedData.day] = targetChild;
       } else {
         // If target cell was empty, clear the source cell
+        auditEntry.toChild = '';
         delete newDuties.duties[draggedData.crossing][draggedData.day];
       }
       
       setDuties(newDuties);
       saveDuties(newDuties);
+      
+      // Log the swap to audit log
+      logSwapToAudit(auditEntry);
       
       // Trigger success animation
       setSwapSuccessAnimation({
@@ -375,6 +390,20 @@ export function DutyGrid() {
     setSelectedForSwap(null);
   };
 
+  const logSwapToAudit = async (auditEntry: any) => {
+    try {
+      await fetch('/api/audit-log', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(auditEntry),
+      });
+    } catch (error) {
+      console.error('Error logging swap to audit log:', error);
+    }
+  };
+
   const performSwap = (source: { child: string; crossing: string; day: string }, 
                       target: { child: string; crossing: string; day: string }) => {
     if (!duties) return;
@@ -389,19 +418,34 @@ export function DutyGrid() {
       newDuties.duties[target.crossing] = {};
     }
 
+    // Prepare audit log entry
+    const auditEntry: any = {
+      fromChild: source.child,
+      fromCrossing: source.crossing,
+      fromDay: source.day,
+      toCrossing: target.crossing,
+      toDay: target.day,
+      swapType: target.child ? 'swap' : 'move'
+    };
+
     // Perform the swap
     if (target.child) {
       // Swap with existing child
+      auditEntry.toChild = target.child;
       newDuties.duties[target.crossing][target.day] = source.child;
       newDuties.duties[source.crossing][source.day] = target.child;
     } else {
       // Move to empty cell
+      auditEntry.toChild = '';
       newDuties.duties[target.crossing][target.day] = source.child;
       delete newDuties.duties[source.crossing][source.day];
     }
 
     setDuties(newDuties);
     saveDuties(newDuties);
+    
+    // Log the swap to audit log
+    logSwapToAudit(auditEntry);
     
     // Trigger success animation
     setSwapSuccessAnimation({

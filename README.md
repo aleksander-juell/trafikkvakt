@@ -9,6 +9,8 @@ A web-based application for managing traffic warden duties at school crossings.
 - **Weekly Duty Assignment**: Assign parents to crossings for specific weeks
 - **Duty Swapping**: Allow parents to swap duties between themselves
 - **Automated Scheduling**: Generate initial duty proposals based on availability
+- **Audit Log**: Track all duty swaps and moves with detailed logging
+- **Auto-Fill with Log Reset**: Automatically clear audit log when generating new duty assignments
 
 ## Tech Stack
 
@@ -130,6 +132,19 @@ trafikkvakt/
 2. **Register Families**: Add parent and child information
 3. **Create Weekly Schedule**: Generate duty assignments for a specific week
 4. **Manage Duties**: View, edit, and swap duties as needed
+5. **Track Changes**: View the audit log in the Configuration page to see all duty swaps and moves
+
+### Audit Log Feature
+
+The system includes comprehensive audit logging for duty changes:
+
+- **Automatic Tracking**: All duty swaps and moves are automatically logged
+- **Detailed Information**: Each log entry shows which children were affected, the positions involved, and when it happened
+- **View History**: Access the audit log from the Configuration page
+- **Auto-Clear**: The log is automatically cleared when using the auto-fill feature for a fresh start
+- **Manual Clear**: Option to manually clear the log if needed
+
+For detailed documentation about the audit log feature, see [AUDIT_LOG_DOCUMENTATION.md](AUDIT_LOG_DOCUMENTATION.md).
 
 ## Contributing
 

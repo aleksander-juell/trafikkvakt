@@ -86,6 +86,23 @@ class DataService {
     return true;
   }
 
+  // Get audit log data
+  async getAuditLog() {
+    return await this.azureService.getAuditLog();
+  }
+
+  // Store audit log entry
+  async storeAuditLogEntry(entry) {
+    await this.azureService.storeAuditLogEntry(entry);
+    return true;
+  }
+
+  // Clear audit log
+  async clearAuditLog() {
+    await this.azureService.clearAuditLog();
+    return true;
+  }
+
   // Check if Azure is available
   isAzureAvailable() {
     return this.azureService.isAvailable();
