@@ -126,6 +126,14 @@ export function DutyGrid() {
   // Selection state for highlighting duties
   const [selectedChildForHighlight, setSelectedChildForHighlight] = useState<string | null>(null);
 
+  // Success animation state for swap feedback
+  const [swapSuccessAnimation, setSwapSuccessAnimation] = useState<{
+    sourceCrossing: string;
+    sourceDay: string;
+    targetCrossing: string;
+    targetDay: string;
+  } | null>(null);
+
   // Function to check for data updates
   const checkForUpdates = async () => {
     try {
@@ -254,6 +262,20 @@ export function DutyGrid() {
       
       setDuties(newDuties);
       saveDuties(newDuties);
+      
+      // Trigger success animation
+      setSwapSuccessAnimation({
+        sourceCrossing: draggedData.crossing,
+        sourceDay: draggedData.day,
+        targetCrossing,
+        targetDay
+      });
+      
+      // Clear animation after 2.5 seconds
+      setTimeout(() => {
+        setSwapSuccessAnimation(null);
+      }, 2500);
+      
       setDraggedData(null);
     }
   };
@@ -380,6 +402,19 @@ export function DutyGrid() {
 
     setDuties(newDuties);
     saveDuties(newDuties);
+    
+    // Trigger success animation
+    setSwapSuccessAnimation({
+      sourceCrossing: source.crossing,
+      sourceDay: source.day,
+      targetCrossing: target.crossing,
+      targetDay: target.day
+    });
+    
+    // Clear animation after 2.5 seconds
+    setTimeout(() => {
+      setSwapSuccessAnimation(null);
+    }, 2500);
   };
 
   const saveDuties = async (dutiesData: DutyData) => {
@@ -450,6 +485,15 @@ export function DutyGrid() {
     }
     
     return baseColor;
+  };
+
+  // Check if a cell should show success animation
+  const isSuccessAnimating = (crossing: string, day: string) => {
+    if (!swapSuccessAnimation) return false;
+    return (
+      (swapSuccessAnimation.sourceCrossing === crossing && swapSuccessAnimation.sourceDay === day) ||
+      (swapSuccessAnimation.targetCrossing === crossing && swapSuccessAnimation.targetDay === day)
+    );
   };
 
   const getDateForDay = (dayName: string) => {
@@ -598,7 +642,11 @@ export function DutyGrid() {
                             data-day={day}
                           >
                             <div 
-                              className="min-h-[60px] border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center hover:border-blue-400 transition-colors"
+                              className={`min-h-[60px] border-2 border-dashed rounded-lg flex items-center justify-center transition-all duration-500 ${
+                                isSuccessAnimating(crossing.name, day) 
+                                  ? 'border-green-400 bg-green-50 ring-2 ring-green-300 ring-opacity-75 swap-success-animation' 
+                                  : 'border-gray-300 hover:border-blue-400'
+                              }`}
                               onDoubleClick={() => handleDoubleClick(crossing.name, day)}
                               onClick={(e) => {
                                 const isEmptyCell = !assignedChild || assignedChild.trim() === '';
