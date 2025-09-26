@@ -48,6 +48,28 @@ let notificationScheduler = null;
 try {
   dataService = new DataService();
   console.log('DataService created successfully');
+  
+  // Wait a bit for DataService to initialize
+  setTimeout(async () => {
+    try {
+      if (!dataService.initialized) {
+        console.warn('DataService taking longer than expected to initialize...');
+        // Wait a bit more for Azure to initialize
+        await new Promise(resolve => setTimeout(resolve, 5000));
+      }
+      
+      if (!dataService.isAzureAvailable()) {
+        console.error('❌ CRITICAL ERROR: Azure Table Storage is not available!');
+        console.error('Please check your AZURE_STORAGE_CONNECTION_STRING and AZURE_TABLE_NAME environment variables.');
+        console.error('Application requires Azure Table Storage to function properly.');
+      } else {
+        console.log('✅ Azure Table Storage is available and ready');
+      }
+    } catch (error) {
+      console.error('Error checking Azure availability:', error);
+    }
+  }, 2000);
+  
   try {
     sseManager = new SSEManager();
     console.log('SSEManager created successfully');
@@ -65,7 +87,8 @@ try {
     console.log('Continuing without notifications...');
   }
 } catch (error) {
-  console.error('DataService creation failed:', error);
+  console.error('❌ CRITICAL ERROR: DataService creation failed:', error);
+  console.error('Application will not function properly without DataService!');
 }
 
 // Configure CORS
@@ -204,133 +227,92 @@ app.get('/api/duties', async (req, res) => {
     console.log('Table name:', process.env.AZURE_TABLE_NAME);
     console.log('DataService exists:', !!dataService);
     console.log('DataService initialized:', dataService ? dataService.initialized : 'N/A');
-    console.log('Using Azure Storage:', dataService ? dataService.useAzure : 'N/A');
+    console.log('Azure Available:', dataService ? dataService.isAzureAvailable() : 'N/A');
     console.log('=======================');
     
-    const duties = dataService ? await dataService.getDuties() : null;
-    if (duties) {
-      console.log(`Duties retrieved using ${dataService.useAzure ? 'Azure Table Storage' : 'JSON fallback'}`);
-      res.json(duties);
-    } else {
-      // Fallback to direct file read
-      const dutiesPath = path.join(__dirname, '../../config/duties.json');
-      if (fs.existsSync(dutiesPath)) {
-        const dutiesData = JSON.parse(fs.readFileSync(dutiesPath, 'utf8'));
-        console.log('Duties retrieved using direct file fallback');
-        res.json(dutiesData);
-      } else {
-        res.status(500).json({ error: 'Failed to read duties data' });
-      }
+    if (!dataService) {
+      return res.status(500).json({ error: 'Data service not available' });
     }
+    
+    const duties = await dataService.getDuties();
+    console.log('Duties retrieved from Azure Table Storage');
+    res.json(duties);
   } catch (error) {
     console.error('Error getting duties:', error);
-    res.status(500).json({ error: 'Failed to read duties data' });
+    res.status(500).json({ error: 'Failed to read duties data from Azure Table Storage' });
   }
 });
 
 app.get('/api/children', async (req, res) => {
   try {
-    const children = dataService ? await dataService.getChildren() : null;
-    if (children) {
-      console.log(`Children API called - Node version: ${process.version}`);
-      res.json(children);
-    } else {
-      const childrenPath = path.join(__dirname, '../../config/children.json');
-      if (fs.existsSync(childrenPath)) {
-        const childrenData = JSON.parse(fs.readFileSync(childrenPath, 'utf8'));
-        console.log('Children retrieved using direct file fallback');
-        res.json(childrenData);
-      } else {
-        res.status(500).json({ error: 'Failed to read children data' });
-      }
+    if (!dataService) {
+      return res.status(500).json({ error: 'Data service not available' });
     }
+    
+    const children = await dataService.getChildren();
+    console.log(`Children API called - Node version: ${process.version}`);
+    res.json(children);
   } catch (error) {
     console.error('Error getting children:', error);
-    res.status(500).json({ error: 'Failed to read children data' });
+    res.status(500).json({ error: 'Failed to read children data from Azure Table Storage' });
   }
 });
 
 app.get('/api/crossings', async (req, res) => {
   try {
-    const crossings = dataService ? await dataService.getCrossings() : null;
-    if (crossings) {
-      res.json(crossings);
-    } else {
-      const crossingsPath = path.join(__dirname, '../../config/crossings.json');
-      if (fs.existsSync(crossingsPath)) {
-        const crossingsData = JSON.parse(fs.readFileSync(crossingsPath, 'utf8'));
-        console.log('Crossings retrieved using direct file fallback');
-        res.json(crossingsData);
-      } else {
-        res.status(500).json({ error: 'Failed to read crossings data' });
-      }
+    if (!dataService) {
+      return res.status(500).json({ error: 'Data service not available' });
     }
+    
+    const crossings = await dataService.getCrossings();
+    res.json(crossings);
   } catch (error) {
     console.error('Error getting crossings:', error);
-    res.status(500).json({ error: 'Failed to read crossings data' });
+    res.status(500).json({ error: 'Failed to read crossings data from Azure Table Storage' });
   }
 });
 
 // Update duties
 app.put('/api/duties', async (req, res) => {
   try {
-    if (dataService) {
-      const success = await dataService.storeDuties(req.body);
-      if (success) {
-        lastDataUpdate = new Date().toISOString();
-        console.log('Duties updated successfully via DataService (Azure or JSON)');
-        
-        // Broadcast real-time update to all connected clients
-        if (sseManager) {
-          try {
-            sseManager.notifyDutyUpdate({
-              type: 'duties-updated',
-              data: req.body,
-              timestamp: lastDataUpdate
-            });
-          } catch (broadcastError) {
-            console.error('Error broadcasting SSE update:', broadcastError);
-          }
-        }
-        
-        res.json({ success: true });
-      } else {
-        res.status(500).json({ error: 'Failed to save duties via DataService' });
-      }
-    } else {
-      // Fallback to direct file write
-      const dutiesPath = path.join(__dirname, '../../config/duties.json');
-      fs.writeFileSync(dutiesPath, JSON.stringify(req.body, null, 2));
-      lastDataUpdate = new Date().toISOString();
-      console.log('Duties updated successfully via direct file write');
-      
-      // Broadcast real-time update to all connected clients
-      if (sseManager) {
-        try {
-          sseManager.notifyDutyUpdate({
-            type: 'duties-updated',
-            data: req.body,
-            timestamp: lastDataUpdate
-          });
-        } catch (broadcastError) {
-          console.error('Error broadcasting SSE update:', broadcastError);
-        }
-      }
-      
-      res.json({ success: true });
+    if (!dataService) {
+      return res.status(500).json({ error: 'Data service not available' });
     }
+    
+    await dataService.storeDuties(req.body);
+    lastDataUpdate = new Date().toISOString();
+    console.log('Duties updated successfully via Azure Table Storage');
+    
+    // Broadcast real-time update to all connected clients
+    if (sseManager) {
+      try {
+        sseManager.notifyDutyUpdate({
+          type: 'duties-updated',
+          data: req.body,
+          timestamp: lastDataUpdate
+        });
+      } catch (broadcastError) {
+        console.error('Error broadcasting SSE update:', broadcastError);
+      }
+    }
+    
+    res.json({ success: true });
   } catch (error) {
     console.error('Error saving duties:', error);
-    res.status(500).json({ error: 'Failed to save duties' });
+    res.status(500).json({ error: 'Failed to save duties to Azure Table Storage' });
   }
 });
 
 // Auto-fill duties endpoint
 app.post('/api/duties/auto-fill', async (req, res) => {
   try {
+    if (!dataService) {
+      return res.status(500).json({ error: 'Data service not available' });
+    }
+    
     // Get current configuration
-    const children = dataService ? await dataService.getChildren() : null;
-    const crossings = dataService ? await dataService.getCrossings() : null;
+    const children = await dataService.getChildren();
+    const crossings = await dataService.getCrossings();
     
     if (!children || !crossings) {
       return res.status(400).json({ error: 'Missing children or crossings data' });
@@ -367,140 +349,86 @@ app.post('/api/duties/auto-fill', async (req, res) => {
     }
     
     // Save the auto-filled duties
-    if (dataService) {
-      const success = await dataService.storeDuties(newDuties);
-      if (success) {
-        lastDataUpdate = new Date().toISOString();
-        console.log('Auto-fill completed successfully via DataService');
-        
-        // Broadcast real-time update to all connected clients
-        if (sseManager) {
-          sseManager.notifyDutyUpdate({
-            type: 'duties-auto-filled',
-            data: newDuties,
-            timestamp: lastDataUpdate
-          });
-        }
-        
-        res.json({ success: true, distribution, duties: newDuties });
-      } else {
-        res.status(500).json({ error: 'Failed to save auto-filled duties' });
-      }
-    } else {
-      // Fallback to direct file write
-      const dutiesPath = path.join(__dirname, '../../config/duties.json');
-      fs.writeFileSync(dutiesPath, JSON.stringify(newDuties, null, 2));
-      lastDataUpdate = new Date().toISOString();
-      console.log('Auto-fill completed successfully via direct file write');
-      
-      // Broadcast real-time update to all connected clients
-      if (sseManager) {
-        sseManager.notifyDutyUpdate({
-          type: 'duties-auto-filled',
-          data: newDuties,
-          timestamp: lastDataUpdate
-        });
-      }
-      
-      res.json({ success: true, distribution, duties: newDuties });
+    await dataService.storeDuties(newDuties);
+    lastDataUpdate = new Date().toISOString();
+    console.log('Auto-fill completed successfully via Azure Table Storage');
+    
+    // Broadcast real-time update to all connected clients
+    if (sseManager) {
+      sseManager.notifyDutyUpdate({
+        type: 'duties-auto-filled',
+        data: newDuties,
+        timestamp: lastDataUpdate
+      });
     }
+    
+    res.json({ success: true, distribution, duties: newDuties });
   } catch (error) {
     console.error('Error during auto-fill:', error);
-    res.status(500).json({ error: 'Failed to auto-fill duties' });
+    res.status(500).json({ error: 'Failed to auto-fill duties in Azure Table Storage' });
   }
 });
 
 // Update children
 app.put('/api/children', async (req, res) => {
   try {
-    if (dataService) {
-      const success = await dataService.storeChildren(req.body);
-      if (success) {
-        console.log('Children updated successfully via DataService (Azure or JSON)');
-        res.json({ success: true });
-      } else {
-        res.status(500).json({ error: 'Failed to save children via DataService' });
-      }
-    } else {
-      // Fallback to direct file write
-      const childrenPath = path.join(__dirname, '../../config/children.json');
-      fs.writeFileSync(childrenPath, JSON.stringify(req.body, null, 2));
-      console.log('Children updated successfully via direct file write');
-      res.json({ success: true });
+    if (!dataService) {
+      return res.status(500).json({ error: 'Data service not available' });
     }
+    
+    await dataService.storeChildren(req.body);
+    console.log('Children updated successfully via Azure Table Storage');
+    res.json({ success: true });
   } catch (error) {
     console.error('Error saving children:', error);
-    res.status(500).json({ error: 'Failed to save children' });
+    res.status(500).json({ error: 'Failed to save children to Azure Table Storage' });
   }
 });
 
 // Update crossings
 app.put('/api/crossings', async (req, res) => {
   try {
-    if (dataService) {
-      const success = await dataService.storeCrossings(req.body);
-      if (success) {
-        console.log('Crossings updated successfully via DataService (Azure or JSON)');
-        res.json({ success: true });
-      } else {
-        res.status(500).json({ error: 'Failed to save crossings via DataService' });
-      }
-    } else {
-      // Fallback to direct file write
-      const crossingsPath = path.join(__dirname, '../../config/crossings.json');
-      fs.writeFileSync(crossingsPath, JSON.stringify(req.body, null, 2));
-      console.log('Crossings updated successfully via direct file write');
-      res.json({ success: true });
+    if (!dataService) {
+      return res.status(500).json({ error: 'Data service not available' });
     }
+    
+    await dataService.storeCrossings(req.body);
+    console.log('Crossings updated successfully via Azure Table Storage');
+    res.json({ success: true });
   } catch (error) {
     console.error('Error saving crossings:', error);
-    res.status(500).json({ error: 'Failed to save crossings' });
+    res.status(500).json({ error: 'Failed to save crossings to Azure Table Storage' });
   }
 });
 
 // Get schedule data
 app.get('/api/schedule', async (req, res) => {
   try {
-    const schedule = dataService ? await dataService.getSchedule() : null;
-    if (schedule) {
-      res.json(schedule);
-    } else {
-      const schedulePath = path.join(__dirname, '../../config/schedule.json');
-      if (fs.existsSync(schedulePath)) {
-        const scheduleData = JSON.parse(fs.readFileSync(schedulePath, 'utf8'));
-        console.log('Schedule retrieved using direct file fallback');
-        res.json(scheduleData);
-      } else {
-        res.status(500).json({ error: 'Failed to read schedule data' });
-      }
+    if (!dataService) {
+      return res.status(500).json({ error: 'Data service not available' });
     }
+    
+    const schedule = await dataService.getSchedule();
+    res.json(schedule);
   } catch (error) {
     console.error('Error getting schedule:', error);
-    res.status(500).json({ error: 'Failed to read schedule data' });
+    res.status(500).json({ error: 'Failed to read schedule data from Azure Table Storage' });
   }
 });
 
 // Update schedule
 app.put('/api/schedule', async (req, res) => {
   try {
-    if (dataService) {
-      const success = await dataService.storeSchedule(req.body);
-      if (success) {
-        console.log('Schedule updated successfully via DataService (Azure or JSON)');
-        res.json({ success: true });
-      } else {
-        res.status(500).json({ error: 'Failed to save schedule via DataService' });
-      }
-    } else {
-      // Fallback to direct file write
-      const schedulePath = path.join(__dirname, '../../config/schedule.json');
-      fs.writeFileSync(schedulePath, JSON.stringify(req.body, null, 2));
-      console.log('Schedule updated successfully via direct file write');
-      res.json({ success: true });
+    if (!dataService) {
+      return res.status(500).json({ error: 'Data service not available' });
     }
+    
+    await dataService.storeSchedule(req.body);
+    console.log('Schedule updated successfully via Azure Table Storage');
+    res.json({ success: true });
   } catch (error) {
     console.error('Error saving schedule:', error);
-    res.status(500).json({ error: 'Failed to save schedule' });
+    res.status(500).json({ error: 'Failed to save schedule to Azure Table Storage' });
   }
 });
 

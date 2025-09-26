@@ -14,8 +14,8 @@ A web-based application for managing traffic warden duties at school crossings.
 
 - **Frontend**: React with TypeScript, Tailwind CSS
 - **Backend**: Node.js with Express
-- **Database**: SQLite
-- **Additional**: Prisma ORM for database management
+- **Database**: Azure Table Storage
+- **Additional**: Real-time updates via Server-Sent Events
 
 ## Deployment
 
@@ -46,10 +46,20 @@ The application is deployed to Azure App Service with the following setup:
    - Node.js version: 22-lts
    - Startup command: `npm start`
    - Environment: Production
+   - **Required Environment Variables**:
+     - `AZURE_STORAGE_CONNECTION_STRING`: Azure Storage connection string
+     - `AZURE_TABLE_NAME`: Name of the Azure table for data storage
 
 ### Environment Variables
 
-No additional environment variables are required for basic operation.
+The application requires Azure Table Storage to be configured:
+
+```bash
+AZURE_STORAGE_CONNECTION_STRING=<your-connection-string>
+AZURE_TABLE_NAME=<your-table-name>
+```
+
+Without these environment variables, the application will not function.
 
 ## Development
 
@@ -59,6 +69,7 @@ No additional environment variables are required for basic operation.
 
 - Node.js (v16 or higher)
 - npm
+- Azure Storage Account with Table Storage enabled
 
 ### Installation
 
@@ -73,12 +84,15 @@ No additional environment variables are required for basic operation.
    npm run install:all
    ```
 
-3. Set up the database:
-   ```bash
-   cd server
-   npx prisma migrate dev
-   cd ..
-   ```
+3. Configure Azure Table Storage:
+   - Create an Azure Storage Account
+   - Get the connection string
+   - Set environment variables:
+     ```bash
+     # Create .env file in server directory
+     AZURE_STORAGE_CONNECTION_STRING=your_connection_string
+     AZURE_TABLE_NAME=trafikkvakt
+     ```
 
 4. Start the development servers:
    ```bash
@@ -104,10 +118,8 @@ trafikkvakt/
 ├── server/          # Express backend
 │   ├── src/
 │   │   ├── routes/
-│   │   ├── models/
-│   │   ├── controllers/
-│   │   └── utils/
-│   ├── prisma/
+│   │   ├── services/    # Azure Table Storage service
+│   │   └── index.js     # Main server file
 │   └── package.json
 └── package.json     # Root package.json
 ```
