@@ -107,11 +107,17 @@ router.post('/test-custom-template', async (req, res) => {
       }
     });
 
-    // Format data for template
+    // Format data for template - ensure it's clean and within limits
     const dateText = whatsappBusinessService.formatDateForTemplate(today);
     const dutiesText = whatsappBusinessService.formatDutiesForTemplate(todayDuties);
     
-    console.log('Template data prepared:', { dateText, dutiesText, dutiesCount: todayDuties.length });
+    console.log('Template data prepared:', { 
+      dateText, 
+      dutiesText: dutiesText.substring(0, 100) + '...', // Log first 100 chars
+      dutiesCount: todayDuties.length,
+      dateLength: dateText.length,
+      dutiesLength: dutiesText.length 
+    });
     
     const result = await whatsappBusinessService.sendTrafikkvaktTemplate(dutiesText, dateText);
     
@@ -122,11 +128,87 @@ router.post('/test-custom-template', async (req, res) => {
       dutiesCount: todayDuties.length,
       templateData: {
         dateText: dateText,
-        dutiesText: dutiesText
+        dutiesText: dutiesText.length > 100 ? dutiesText.substring(0, 100) + '...' : dutiesText
       }
     });
   } catch (error) {
     console.error('WhatsApp Business API custom template test error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/whatsapp-business/template-preview - Preview template data
+router.get('/template-preview', async (req, res) => {
+  try {
+    const dataService = req.app.get('dataService');
+    if (!dataService) {
+      return res.status(500).json({ error: 'Data service not available' });
+    }
+
+    // Get today's duties
+    const today = new Date();
+    const norwegianDays = ['Søndag', 'Mandag', 'Tirsdag', 'Onsdag', 'Torsdag', 'Fredag', 'Lørdag'];
+    const todayName = norwegianDays[today.getDay()];
+    
+    const dutiesData = await dataService.getDuties();
+    if (!dutiesData || !dutiesData.duties) {
+      return res.status(404).json({ error: 'No duties data available' });
+    }
+    
+    // Extract today's duties
+    const todayDuties = [];
+    Object.entries(dutiesData.duties).forEach(([crossing, days]) => {
+      if (days[todayName]) {
+        todayDuties.push({
+          child: days[todayName],
+          crossing: crossing
+        });
+      }
+    });
+
+    // Format data for template
+    const dateText = whatsappBusinessService.formatDateForTemplate(today);
+    const dutiesText = whatsappBusinessService.formatDutiesForTemplate(todayDuties);
+    
+    res.json({
+      todayName,
+      dutiesCount: todayDuties.length,
+      rawDuties: todayDuties,
+      templateParameters: {
+        dateText: {
+          value: dateText,
+          length: dateText.length,
+          hasSpecialChars: /[^\w\s\.]/.test(dateText)
+        },
+        dutiesText: {
+          value: dutiesText,
+          length: dutiesText.length,
+          lines: dutiesText.split('\n').length,
+          hasSpecialChars: /[^\w\s\.\-]/.test(dutiesText)
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Template preview error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/whatsapp-business/test-basic-template - Test with minimal parameters
+router.post('/test-basic-template', async (req, res) => {
+  try {
+    console.log('Testing basic template parameters');
+    
+    // Test with the exact same example from the template definition
+    const result = await whatsappBusinessService.sendTrafikkvaktTemplate('Hhh', 'Hhh');
+    
+    res.json({
+      success: true,
+      message: 'Basic template test sent successfully', 
+      result: result
+    });
+  } catch (error) {
+    console.error('Basic template test error:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -231,6 +313,17 @@ router.get('/message/today', async (req, res) => {
     });
   } catch (error) {
     console.error('Error generating today\'s duty message:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/whatsapp-business/templates - Get message templates
+router.get('/templates', async (req, res) => {
+  try {
+    const templates = await whatsappBusinessService.getMessageTemplates();
+    res.json(templates);
+  } catch (error) {
+    console.error('WhatsApp Business API templates error:', error);
     res.status(500).json({ error: error.message });
   }
 });

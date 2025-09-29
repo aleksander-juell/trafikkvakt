@@ -140,7 +140,7 @@ class WhatsAppBusinessService {
     }
   }
 
-  // Send custom trafikkvakt duties template (once approved)
+  // Send custom trafikkvakt duties template with multiple fallback attempts
   async sendTrafikkvaktTemplate(dutiesText, dateText, recipient = null) {
     if (!this.isReady) {
       throw new Error('WhatsApp Business API is not ready. Please ensure it is initialized.');
@@ -148,73 +148,119 @@ class WhatsAppBusinessService {
 
     const targetNumber = this.formatPhoneNumber(recipient || this.recipientNumber);
 
-    try {
-      console.log('📤 Sending trafikkvakt_dagens_vakter template message...');
-      console.log('🎯 Recipient:', targetNumber);
-      console.log('📅 Date:', dateText);
-      console.log('👥 Duties:', dutiesText);
-
-      const payload = {
-        messaging_product: 'whatsapp',
-        to: targetNumber,
-        type: 'template',
-        template: {
-          name: 'trafikkvakt_dagens_vakter',
-          language: {
-            code: 'nb' // Norwegian
-          },
-          components: [
-            {
-              type: 'body',
-              parameters: [
-                {
-                  type: 'text',
-                  text: dateText
-                },
-                {
-                  type: 'text', 
-                  text: dutiesText
-                }
-              ]
-            }
-          ]
-        }
-      };
-
-      const response = await this.api.post(
-        `${this.baseUrl}/${this.phoneNumberId}/messages`,
-        payload,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.accessToken}`
-          }
-        }
-      );
-
-      console.log('✅ Trafikkvakt template sent successfully');
-      console.log('📋 Response:', {
-        message_id: response.data.messages[0].id,
-        status: 'sent'
-      });
-      
-      return {
-        success: true,
-        messageId: response.data.messages[0].id,
-        recipient: targetNumber,
-        timestamp: new Date().toISOString(),
-        template: 'trafikkvakt_dagens_vakter'
-      };
-
-    } catch (error) {
-      console.error('❌ Error sending trafikkvakt template:', error.response?.data || error.message);
-      
-      // If template not found, fallback to hello world
-      if (error.response?.data?.error?.code === 131026) {
-        console.log('⚠️ Custom template not approved yet, falling back to hello_world');
-        return await this.sendHelloWorldTemplate(recipient);
+    // Try different template variations in case the approved one has different structure
+    const templateVariations = [
+      {
+        name: 'trafikkvakt_dagens_vakter',
+        language: 'no',
+        description: 'Original with "no" language code'
+      },
+      {
+        name: 'trafikkvakt_dagens_vakter', 
+        language: 'nb_NO',
+        description: 'Full Norwegian locale'
+      },
+      {
+        name: 'trafikkvakt_dagens_vakter',
+        language: 'nb',
+        description: 'Simple Norwegian code'  
       }
+    ];
+
+    for (let i = 0; i < templateVariations.length; i++) {
+      const variation = templateVariations[i];
       
-      throw new Error(`Failed to send trafikkvakt template: ${error.response?.data?.error?.message || error.message}`);
+      try {
+        console.log(`📤 Attempting template variation ${i + 1}/${templateVariations.length}: ${variation.description}`);
+        console.log('🎯 Recipient:', targetNumber);
+        console.log('📅 Date parameter:', JSON.stringify(dateText));
+        console.log('👥 Duties parameter:', JSON.stringify(dutiesText));
+        console.log('📏 Date length:', dateText.length);
+        console.log('📏 Duties length:', dutiesText.length);
+
+        const payload = {
+          messaging_product: 'whatsapp',
+          to: targetNumber,
+          type: 'template',
+          template: {
+            name: variation.name,
+            language: {
+              code: variation.language
+            },
+            components: [
+              {
+                type: 'body',
+                parameters: [
+                  {
+                    type: 'text',
+                    text: dateText
+                  },
+                  {
+                    type: 'text', 
+                    text: dutiesText
+                  }
+                ]
+              }
+            ]
+          }
+        };
+
+        console.log('📦 Full payload:', JSON.stringify(payload, null, 2));
+
+        const response = await this.api.post(
+          `${this.baseUrl}/${this.phoneNumberId}/messages`,
+          payload,
+          {
+            headers: {
+              'Authorization': `Bearer ${this.accessToken}`
+            }
+          }
+        );
+
+        console.log(`✅ Trafikkvakt template sent successfully with variation: ${variation.description}`);
+        console.log('📋 Response:', {
+          message_id: response.data.messages[0].id,
+          status: 'sent'
+        });
+        
+        return {
+          success: true,
+          messageId: response.data.messages[0].id,
+          recipient: targetNumber,
+          timestamp: new Date().toISOString(),
+          template: variation.name,
+          languageCode: variation.language
+        };
+
+      } catch (error) {
+        console.error(`❌ Variation ${i + 1} failed:`, error.response?.data?.error?.message || error.message);
+        
+        // Log detailed error information for template issues
+        if (error.response?.data?.error) {
+          const errorDetails = error.response.data.error;
+          console.error('🔍 Template Error Details:');
+          console.error('   Code:', errorDetails.code);
+          console.error('   Message:', errorDetails.message);
+          console.error('   Type:', errorDetails.type);
+          console.error('   Subcode:', errorDetails.error_subcode);
+          console.error('   User Title:', errorDetails.error_user_title);
+          console.error('   User Message:', errorDetails.error_user_msg);
+        }
+        
+        // If template not found, fallback to hello world
+        if (error.response?.data?.error?.code === 131026) {
+          console.log('⚠️ Custom template not approved yet, falling back to hello_world');
+          return await this.sendHelloWorldTemplate(recipient);
+        }
+        
+        // If this is the last variation, throw the error
+        if (i === templateVariations.length - 1) {
+          throw new Error(`All template variations failed. Last error: ${error.response?.data?.error?.message || error.message}`);
+        }
+        
+        // Otherwise continue to next variation
+        console.log(`⏭️ Trying next variation...`);
+      }
     }
   }
 
@@ -281,18 +327,38 @@ class WhatsAppBusinessService {
       return 'Ingen vakter planlagt i dag.';
     }
 
-    return todayDuties.map(duty => `📍 ${duty.crossing}: ${duty.child}`).join('\n');
+    // Ultra-simple formatting - just child names and basic location
+    let dutiesList = todayDuties.map((duty, index) => {
+      // Get just the first part of crossing name before any separator
+      let crossing = duty.crossing.split(/[-–]/)[0].trim();
+      
+      // Clean the crossing name completely
+      crossing = crossing
+        .replace(/[æøå]/g, match => ({ 'æ': 'ae', 'ø': 'o', 'å': 'a' }[match]))
+        .replace(/[^a-zA-Z0-9 ]/g, '') // Remove ALL special chars
+        .replace(/\s+/g, ' ') // Collapse spaces
+        .trim();
+      
+      if (crossing.length > 15) {
+        crossing = crossing.substring(0, 15); // No ellipsis, just cut
+      }
+      
+      return `${duty.child} - ${crossing}`;
+    }).join('\n');
+
+    return dutiesList;
   }
 
   formatDateForTemplate(date) {
-    const dayNames = ['søndag', 'mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag'];
+    const dayNames = ['sondag', 'mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lordag'];
+    const monthNames = ['januar', 'februar', 'mars', 'april', 'mai', 'juni', 
+                       'juli', 'august', 'september', 'oktober', 'november', 'desember'];
     const dayName = dayNames[date.getDay()];
-    const dateStr = date.toLocaleDateString('nb-NO', { 
-      day: 'numeric',
-      month: 'long'
-    });
+    const day = date.getDate();
+    const month = monthNames[date.getMonth()];
     
-    return `${dayName} ${dateStr}`;
+    // Very simple format without special characters
+    return `${dayName} ${day}. ${month}`;
   }
 
   formatTodayMessage(todayDuties, date) {
@@ -325,6 +391,54 @@ class WhatsAppBusinessService {
       recipientNumber: this.recipientNumber,
       hasCredentials: !!(this.accessToken && this.phoneNumberId && this.recipientNumber)
     };
+  }
+
+  // Get message templates from WhatsApp Business API
+  async getMessageTemplates() {
+    if (!this.isReady) {
+      throw new Error('WhatsApp Business API is not ready. Please ensure it is initialized.');
+    }
+
+    try {
+      console.log('📋 Fetching message templates...');
+      
+      const response = await this.api.get(
+        `${this.baseUrl}/${this.businessAccountId}/message_templates`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.accessToken}`
+          }
+        }
+      );
+
+      console.log('✅ Templates retrieved successfully');
+      const templates = response.data.data || [];
+      
+      // Filter for our custom template
+      const trafikkvaktTemplate = templates.find(t => t.name === 'trafikkvakt_dagens_vakter');
+      
+      if (trafikkvaktTemplate) {
+        console.log('🎯 Found trafikkvakt template:', {
+          name: trafikkvaktTemplate.name,
+          status: trafikkvaktTemplate.status,
+          language: trafikkvaktTemplate.language,
+          category: trafikkvaktTemplate.category,
+          components: trafikkvaktTemplate.components
+        });
+      } else {
+        console.log('⚠️ trafikkvakt_dagens_vakter template not found in approved templates');
+      }
+      
+      return {
+        templates: templates,
+        trafikkvaktTemplate: trafikkvaktTemplate || null,
+        count: templates.length
+      };
+
+    } catch (error) {
+      console.error('❌ Error fetching templates:', error.response?.data || error.message);
+      throw new Error(`Failed to fetch templates: ${error.response?.data?.error?.message || error.message}`);
+    }
   }
 }
 
